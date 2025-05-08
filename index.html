@@ -37,108 +37,127 @@
     <button onclick="decodeImage()">Read Hidden Message</button>
     <p><strong>Message:</strong></p>
     <textarea id="decodedMessage" readonly></textarea>
+    <br>
+    <button onclick="previewDecoded()">🔎 Preview Decoded Message</button>
+    <button onclick="evalDecoded()">🔥 Eval Decoded Message (DANGEROUS)</button>
   </div>
 
   <canvas id="canvas"></canvas>
 
   <script>
-    function showTab(id) {
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
+  function showTab(id) {
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function encodeImage() {
+    const file = document.getElementById('inputImage').files[0];
+    const message = document.getElementById('messageInput').value;
+
+    if (!file || !message) {
+      alert('Please select a PNG and enter a message.');
+      return;
     }
 
-    function encodeImage() {
-      const file = document.getElementById('inputImage').files[0];
-      const message = document.getElementById('messageInput').value;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.getElementById('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, img.width, img.height);
+        const pixels = imgData.data;
 
-      if (!file || !message) {
-        alert('Please select a PNG and enter a message.');
-        return;
-      }
+        const messageBytes = new TextEncoder().encode(message);
+        const lengthBuffer = new Uint8Array(4);
+        new DataView(lengthBuffer.buffer).setUint32(0, messageBytes.length);
+        const full = new Uint8Array([...lengthBuffer, ...messageBytes]);
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.getElementById('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const imgData = ctx.getImageData(0, 0, img.width, img.height);
-          const pixels = imgData.data;
-
-          // Convert message to binary with 4-byte length prefix
-          const messageBytes = new TextEncoder().encode(message);
-          const lengthBuffer = new Uint8Array(4);
-          new DataView(lengthBuffer.buffer).setUint32(0, messageBytes.length);
-          const full = new Uint8Array([...lengthBuffer, ...messageBytes]);
-
-          let bitIndex = 0;
-          for (let i = 0; i < pixels.length; i += 4) {
-            for (let j = 0; j < 3; j++) {
-              if (bitIndex >= full.length * 8) break;
-              const byte = full[Math.floor(bitIndex / 8)];
-              const bit = (byte >> (7 - bitIndex % 8)) & 1;
-              pixels[i + j] = (pixels[i + j] & 0xFE) | bit;
-              bitIndex++;
-            }
+        let bitIndex = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          for (let j = 0; j < 3; j++) {
+            if (bitIndex >= full.length * 8) break;
+            const byte = full[Math.floor(bitIndex / 8)];
+            const bit = (byte >> (7 - bitIndex % 8)) & 1;
+            pixels[i + j] = (pixels[i + j] & 0xFE) | bit;
+            bitIndex++;
           }
+        }
 
-          ctx.putImageData(imgData, 0, 0);
+        ctx.putImageData(imgData, 0, 0);
 
-          canvas.toBlob(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'encoded.png';
-            a.click();
-          });
-        };
-        img.src = reader.result;
+        canvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'encoded.png';
+          a.click();
+        });
       };
-      reader.readAsDataURL(file);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function decodeImage() {
+    const file = document.getElementById('decodeImage').files[0];
+    if (!file) {
+      alert('Please select a PNG image.');
+      return;
     }
 
-    function decodeImage() {
-      const file = document.getElementById('decodeImage').files[0];
-      if (!file) {
-        alert('Please select a PNG image.');
-        return;
-      }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.getElementById('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const pixels = ctx.getImageData(0, 0, img.width, img.height).data;
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.getElementById('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const pixels = ctx.getImageData(0, 0, img.width, img.height).data;
-
-          const bits = [];
-          for (let i = 0; i < pixels.length; i += 4) {
-            for (let j = 0; j < 3; j++) {
-              bits.push(pixels[i + j] & 1);
-            }
+        const bits = [];
+        for (let i = 0; i < pixels.length; i += 4) {
+          for (let j = 0; j < 3; j++) {
+            bits.push(pixels[i + j] & 1);
           }
+        }
 
-          const bytes = [];
-          for (let i = 0; i < bits.length; i += 8) {
-            bytes.push(bits.slice(i, i + 8).reduce((acc, b, idx) => acc | (b << (7 - idx)), 0));
-          }
+        const bytes = [];
+        for (let i = 0; i < bits.length; i += 8) {
+          bytes.push(bits.slice(i, i + 8).reduce((acc, b, idx) => acc | (b << (7 - idx)), 0));
+        }
 
-          const length = new DataView(new Uint8Array(bytes.slice(0, 4)).buffer).getUint32(0);
-          const msgBytes = bytes.slice(4, 4 + length);
-          const decoded = new TextDecoder().decode(new Uint8Array(msgBytes));
-          document.getElementById('decodedMessage').value = decoded;
-        };
-        img.src = reader.result;
+        const length = new DataView(new Uint8Array(bytes.slice(0, 4)).buffer).getUint32(0);
+        const msgBytes = bytes.slice(4, 4 + length);
+        const decoded = new TextDecoder().decode(new Uint8Array(msgBytes));
+        document.getElementById('decodedMessage').value = decoded;
       };
-      reader.readAsDataURL(file);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function previewDecoded() {
+    const msg = document.getElementById('decodedMessage').value;
+    alert("Preview:\n\n" + msg);
+  }
+
+  function evalDecoded() {
+    const msg = document.getElementById('decodedMessage').value;
+    const confirmed = confirm("⚠️ WARNING:\n\nThis will execute the decoded message as JavaScript.\n\nProceed only if you know it is safe.");
+    if (confirmed) {
+      try {
+        eval(msg);
+      } catch (e) {
+        alert("Error during eval:\n" + e);
+      }
     }
-  </script>
+  }
+</script>
 </body>
 </html>
